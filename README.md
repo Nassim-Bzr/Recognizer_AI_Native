@@ -19,13 +19,13 @@ Chaque scan est sauvegardé dans ton **historique** lié à ton compte.
 | Authentification | Supabase Auth (email / mot de passe) |
 | Base de données | Supabase Postgres + Row Level Security |
 | Stockage photos | Supabase Storage (bucket `scans`) |
-| IA (vision) | API Claude (`claude-opus-5`) via Edge Function Supabase |
+| IA (vision) | MiMo V2.5 (`mimo-v2.5-free`, **gratuit**) via [OpenCode Zen](https://opencode.ai) — API OpenAI-compatible |
 | Déploiement | EAS Build (APK Android) |
 
-**Pourquoi une Edge Function ?** La clé API Anthropic ne doit jamais se retrouver dans
+**Pourquoi une Edge Function ?** La clé API ne doit jamais se retrouver dans
 l'APK. L'app envoie la photo à la fonction `estimate` (côté serveur, authentifiée par le
-JWT Supabase de l'utilisateur), qui appelle Claude et renvoie un JSON garanti valide
-(structured outputs).
+JWT Supabase de l'utilisateur), qui appelle le modèle de vision et renvoie un JSON
+validé et normalisé côté serveur.
 
 ---
 
@@ -66,21 +66,21 @@ tout le parcours fonctionne (l'estimation est simulée) — parfait pour dévelo
 
 ### 4. Brancher la vraie IA (bonus valorisé)
 
-Nécessite le [CLI Supabase](https://supabase.com/docs/guides/local-development/cli/getting-started)
-et une clé API sur [platform.claude.com](https://platform.claude.com).
+Récupère une clé API **gratuite** sur [opencode.ai](https://opencode.ai) (section **Zen** →
+« Copier la clé »), puis :
 
 ```bash
-supabase login
-supabase link --project-ref <ton-project-ref>
-supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
-supabase functions deploy estimate
+npx supabase login
+npx supabase secrets set --project-ref <ton-project-ref> OPENCODE_API_KEY=sk-...
+npx supabase functions deploy estimate --project-ref <ton-project-ref>
 ```
 
 Puis passe `EXPO_PUBLIC_AI_MOCK=0` dans `.env` et relance `npx expo start --clear`.
 
-> 💰 Coût : le modèle par défaut est `claude-opus-5`. Pour réduire le coût des démos,
-> tu peux remplacer le modèle par `claude-sonnet-5` dans
-> `supabase/functions/estimate/index.ts` (même API, moins cher).
+> 💰 Coût : le modèle par défaut est `mimo-v2.5-free` (vision, 200k contexte, **0 €**).
+> Tu peux changer de modèle sans toucher au code via un secret :
+> `npx supabase secrets set AI_MODEL=claude-sonnet-5` (ou tout autre modèle du
+> catalogue Zen, endpoint OpenAI-compatible `https://opencode.ai/zen/v1/chat/completions`).
 
 ### 5. Générer l'APK (déploiement)
 
@@ -113,7 +113,7 @@ src/
   lib/                     # client supabase, contexte auth, service IA, thème
 supabase/
   schema.sql               # table scans + RLS + bucket storage
-  functions/estimate/      # Edge Function → API Claude (vision + structured outputs)
+  functions/estimate/      # Edge Function → OpenCode Zen (vision, JSON validé)
 ```
 
 ### Conformité au barème
@@ -125,7 +125,7 @@ supabase/
 | CRUD branché à une base | **C**reate (enregistrer un scan) · **R**ead (historique/détail) · **U**pdate (statut, prix vendu, notes, favori) · **D**elete (supprimer un scan) |
 | États chargement/erreur/vide | loaders, messages d'erreur FR, empty states sur chaque écran |
 | Déploiement | `eas.json` profil `preview` → APK |
-| Bonus IA | Edge Function `estimate` : vision + JSON structuré garanti |
+| Bonus IA | Edge Function `estimate` : vision + JSON validé/normalisé côté serveur |
 
 ---
 
@@ -144,8 +144,8 @@ supabase/
 
 - **RLS** : chaque requête passe par des policies Postgres — un utilisateur ne peut
   lire/modifier que ses propres scans, même avec la clé anon.
-- **Clé IA côté serveur** : la clé Anthropic vit dans les secrets Supabase, jamais dans
-  l'app. La fonction est appelée avec le JWT utilisateur (verify_jwt).
+- **Clé IA côté serveur** : la clé OpenCode Zen vit dans les secrets Supabase, jamais
+  dans l'app. La fonction est appelée avec le JWT utilisateur (verify_jwt).
 - **Storage** : chaque utilisateur ne peut uploader que dans son dossier `<user_id>/`.
 - **Honnêteté sur l'IA** : les prix sont des *estimations* du marché de l'occasion
   issues des connaissances du modèle, pas un scraping temps réel des annonces.
