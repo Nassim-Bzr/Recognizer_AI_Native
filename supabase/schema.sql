@@ -44,21 +44,27 @@ create index if not exists scans_user_created_idx
 -- ------------------------------------------------------------
 alter table public.scans enable row level security;
 
+-- Les nouveaux projets Supabase n'exposent plus automatiquement les tables
+-- publiques à la Data API. L'application mobile utilise supabase-js avec un
+-- utilisateur connecté : on accorde donc uniquement les droits nécessaires à
+-- ce rôle, puis les policies ci-dessous limitent chaque ligne à son propriétaire.
+grant select, insert, update, delete on table public.scans to authenticated;
+
 create policy "Lire ses propres scans"
-  on public.scans for select
+  on public.scans for select to authenticated
   using (auth.uid() = user_id);
 
 create policy "Créer ses propres scans"
-  on public.scans for insert
+  on public.scans for insert to authenticated
   with check (auth.uid() = user_id);
 
 create policy "Modifier ses propres scans"
-  on public.scans for update
+  on public.scans for update to authenticated
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
 create policy "Supprimer ses propres scans"
-  on public.scans for delete
+  on public.scans for delete to authenticated
   using (auth.uid() = user_id);
 
 -- ------------------------------------------------------------
