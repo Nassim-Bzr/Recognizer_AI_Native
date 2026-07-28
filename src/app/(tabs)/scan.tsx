@@ -16,7 +16,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { EstimationDetails } from '@/components/EstimationDetails';
-import { Button } from '@/components/ui';
+import { Button, Input } from '@/components/ui';
 import { estimateObject } from '@/lib/ai';
 import { useAuth } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
@@ -53,6 +53,10 @@ export default function ScanScreen() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [messageIndex, setMessageIndex] = useState(0);
+  const [productReference, setProductReference] = useState('');
+  const [conditionNotes, setConditionNotes] = useState('');
+  const [accessories, setAccessories] = useState('');
+  const [descriptionVariantIndex, setDescriptionVariantIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
 
   // Fait défiler les messages pendant l'analyse
@@ -74,6 +78,7 @@ export default function ScanScreen() {
       mediaType: asset.mimeType ?? 'image/jpeg',
     });
     setEstimation(null);
+    setDescriptionVariantIndex(0);
     setError(null);
     setStep('preview');
   };
@@ -99,8 +104,13 @@ export default function ScanScreen() {
     setStep('analyzing');
     setError(null);
     try {
-      const result = await estimateObject(image.base64, image.mediaType);
+      const result = await estimateObject(image.base64, image.mediaType, {
+        productReference: productReference.trim() || undefined,
+        conditionNotes: conditionNotes.trim() || undefined,
+        accessories: accessories.trim() || undefined,
+      });
       setEstimation(result);
+      setDescriptionVariantIndex(0);
       setStep('result');
       scrollRef.current?.scrollTo({ y: 0, animated: false });
     } catch (e) {
@@ -124,9 +134,10 @@ export default function ScanScreen() {
       }
 
       // 2. Insertion du scan (CRUD : Create)
+      const { description_variants: _descriptionVariants, ...persistedEstimation } = estimation;
       const { data, error: insertError } = await supabase
         .from('scans')
-        .insert({ ...estimation, image_url: imageUrl })
+        .insert({ ...persistedEstimation, image_url: imageUrl })
         .select('id')
         .single();
       if (insertError) throw insertError;
@@ -145,13 +156,33 @@ export default function ScanScreen() {
     setImage(null);
     setEstimation(null);
     setError(null);
+    setProductReference('');
+    setConditionNotes('');
+    setAccessories('');
+    setDescriptionVariantIndex(0);
   };
+
+  const showNextDescription = () => {
+    if (!estimation?.description_variants) return;
+    const nextIndex = descriptionVariantIndex + 1;
+    const nextDescription = estimation.description_variants[nextIndex];
+    if (!nextDescription) return;
+
+    setEstimation({ ...estimation, description: nextDescription });
+    setDescriptionVariantIndex(nextIndex);
+  };
+
+  const descriptionRegenerationsLeft = Math.max(
+    (estimation?.description_variants?.length ?? 1) - descriptionVariantIndex - 1,
+    0,
+  );
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView
         ref={scrollRef}
         contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}>
         {/* ---------- Étape 1 : choisir une photo ---------- */}
         {step === 'idle' && (
@@ -202,6 +233,48 @@ export default function ScanScreen() {
               )}
             </View>
 
+            {step === 'preview' && (
+              <View style={styles.hintsCard}>
+                <View style={styles.hintsHeader}>
+                  <Ionicons name="sparkles-outline" size={18} color={colors.accent} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.hintsTitle}>Aide l'IA à identifier le bon modèle</Text>
+                    <Text style={styles.hintsSubtitle}>
+                      Facultatif, mais très utile si une référence est peu visible sur la photo.
+                    </Text>
+                  </View>
+                </View>
+                <Input
+                  label="Marque, modèle ou référence"
+                  placeholder="Ex. Logitech G309, Acer AN515-58…"
+                  value={productReference}
+                  onChangeText={setProductReference}
+                  maxLength={160}
+                  autoCapitalize="sentences"
+                />
+                <Input
+                  label="État réel et défauts"
+                  placeholder="Ex. très bon état, petite rayure sous la coque…"
+                  value={conditionNotes}
+                  onChangeText={setConditionNotes}
+                  maxLength={400}
+                  multiline
+                  numberOfLines={3}
+                  style={styles.multilineInput}
+                />
+                <Input
+                  label="Accessoires et détails utiles"
+                  placeholder="Ex. boîte, câble, dongle USB, facture…"
+                  value={accessories}
+                  onChangeText={setAccessories}
+                  maxLength={300}
+                  multiline
+                  numberOfLines={2}
+                  style={styles.multilineInput}
+                />
+              </View>
+            )}
+
             {error ? (
               <View style={styles.errorCard}>
                 <Ionicons name="warning-outline" size={18} color={colors.danger} />
@@ -232,7 +305,11 @@ export default function ScanScreen() {
               </View>
             </View>
 
-            <EstimationDetails estimation={estimation} />
+            <EstimationDetails
+              estimation={estimation}
+              onRegenerateDescription={showNextDescription}
+              descriptionRegenerationsLeft={descriptionRegenerationsLeft}
+            />
 
             <View style={{ gap: spacing.sm }}>
               <Button label="Enregistrer dans l'historique" onPress={save} loading={saving} />
@@ -295,6 +372,19 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   analyzingText: { color: colors.text, fontSize: 16, fontWeight: '600', textAlign: 'center' },
+
+  hintsCard: {
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+  },
+  hintsHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
+  hintsTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
+  hintsSubtitle: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
+  multilineInput: { minHeight: 76, textAlignVertical: 'top' },
 
   errorCard: {
     flexDirection: 'row',

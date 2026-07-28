@@ -42,7 +42,17 @@ function badgeColor(value: string): string {
  * prix, indicateurs de marché, conseil de vente et description d'annonce.
  * Utilisé sur l'écran Scanner (résultat) et sur l'écran Détail.
  */
-export function EstimationDetails({ estimation }: { estimation: Estimation }) {
+interface EstimationDetailsProps {
+  estimation: Estimation;
+  onRegenerateDescription?: () => void;
+  descriptionRegenerationsLeft?: number;
+}
+
+export function EstimationDetails({
+  estimation,
+  onRegenerateDescription,
+  descriptionRegenerationsLeft = 0,
+}: EstimationDetailsProps) {
   const [copied, setCopied] = useState(false);
   const range = Math.max(estimation.price_max - estimation.price_min, 1);
   const position = Math.min(
@@ -137,6 +147,27 @@ export function EstimationDetails({ estimation }: { estimation: Estimation }) {
           </Pressable>
         </View>
         <Text style={styles.cardBody}>{estimation.description}</Text>
+        {onRegenerateDescription ? (
+          <View style={styles.regenerateWrap}>
+            <Pressable
+              onPress={onRegenerateDescription}
+              disabled={descriptionRegenerationsLeft <= 0}
+              style={({ pressed }) => [
+                styles.regenerateButton,
+                (pressed || descriptionRegenerationsLeft <= 0) && { opacity: 0.5 },
+              ]}>
+              <Ionicons name="refresh" size={15} color={colors.accent} />
+              <Text style={styles.regenerateLabel}>
+                {descriptionRegenerationsLeft > 0
+                  ? `Nouvelle version (${descriptionRegenerationsLeft})`
+                  : 'Variantes épuisées'}
+              </Text>
+            </Pressable>
+            <Text style={styles.regenerateHint}>
+              Les variantes sont déjà générées : aucun nouvel appel IA.
+            </Text>
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -209,6 +240,20 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface2,
   },
   copyLabel: { color: colors.muted, fontSize: 12, fontWeight: '600' },
+  regenerateWrap: { marginTop: spacing.md, gap: 6 },
+  regenerateButton: {
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
+  },
+  regenerateLabel: { color: colors.accent, fontSize: 13, fontWeight: '700' },
+  regenerateHint: { color: colors.muted, fontSize: 11, textAlign: 'center' },
 
   indicatorRow: {
     flexDirection: 'row',

@@ -1,7 +1,8 @@
 # 📸 Estimo — Scanne un objet, découvre son prix de revente
 
-Application mobile React Native (Expo) : tu prends **n'importe quel objet en photo**, l'IA
-l'identifie et te donne son **prix de revente conseillé**, la **fourchette de prix**, la
+Application mobile React Native (Expo) : tu prends **n'importe quel objet en photo**, tu peux
+ajouter sa référence, son état et ses accessoires, puis l'IA l'identifie et te donne son
+**prix de revente conseillé**, la **fourchette de prix**, la
 **facilité de vente**, la **demande**, la **concurrence** et même une **annonce prête à publier**.
 Chaque scan est sauvegardé dans ton **historique** lié à ton compte.
 
@@ -15,7 +16,7 @@ Chaque scan est sauvegardé dans ton **historique** lié à ton compte.
 
 | Brique | Techno |
 |---|---|
-| App mobile | Expo (React Native + TypeScript + expo-router) |
+| App mobile | Expo SDK 54 (React Native + TypeScript + expo-router) |
 | Authentification | Supabase Auth (email / mot de passe) |
 | Base de données | Supabase Postgres + Row Level Security |
 | Stockage photos | Supabase Storage (bucket `scans`) |
@@ -106,7 +107,7 @@ src/
     (auth)/                # connexion / inscription
     (tabs)/
       history.tsx          # LISTE : historique, recherche, filtres, stats
-      scan.tsx             # photo → IA → résultat → enregistrement
+      scan.tsx             # photo + indices → IA → variantes d'annonce → enregistrement
       profile.tsx          # statistiques + déconnexion
     scan/[id].tsx          # DÉTAIL (navigation avec paramètre) : update/delete
   components/              # UI partagée (boutons, cartes, bloc estimation)
@@ -125,7 +126,7 @@ supabase/
 | CRUD branché à une base | **C**reate (enregistrer un scan) · **R**ead (historique/détail) · **U**pdate (statut, prix vendu, notes, favori) · **D**elete (supprimer un scan) |
 | États chargement/erreur/vide | loaders, messages d'erreur FR, empty states sur chaque écran |
 | Déploiement | `eas.json` profil `preview` → APK |
-| Bonus IA | Edge Function `estimate` : vision + JSON validé/normalisé côté serveur |
+| Bonus IA | Vision + indices utilisateur + JSON normalisé + 3 annonces sans appels supplémentaires |
 
 ---
 
@@ -135,8 +136,8 @@ supabase/
    écrans login/register, structure expo-router.
 2. **Membre B — CRUD & data** : schéma SQL + RLS, historique (recherche/filtres),
    écran détail (update/delete), storage des photos.
-3. **Membre C — IA & déploiement** : flux scan (caméra), Edge Function Claude,
-   structured outputs, mode mock, build EAS.
+3. **Membre C — IA & déploiement** : flux scan (caméra + indices), Edge Function OpenCode Zen,
+   normalisation du JSON, variantes d'annonce, mode mock, build EAS.
 
 ---
 
@@ -146,6 +147,8 @@ supabase/
   lire/modifier que ses propres scans, même avec la clé anon.
 - **Clé IA côté serveur** : la clé OpenCode Zen vit dans les secrets Supabase, jamais
   dans l'app. La fonction est appelée avec le JWT utilisateur (verify_jwt).
+- **Maîtrise des appels IA** : les trois annonces sont générées pendant l'estimation ;
+  changer de variante ne déclenche aucun nouvel appel payant et s'arrête après deux changements.
 - **Storage** : chaque utilisateur ne peut uploader que dans son dossier `<user_id>/`.
 - **Honnêteté sur l'IA** : les prix sont des *estimations* du marché de l'occasion
   issues des connaissances du modèle, pas un scraping temps réel des annonces.
