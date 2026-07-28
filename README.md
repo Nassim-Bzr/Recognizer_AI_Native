@@ -30,14 +30,31 @@ validé et normalisé côté serveur.
 
 ---
 
-## 🚀 Lancer le projet
+## 🚀 Installer et déployer depuis un clone
+
+### Pré-requis
+
+- Node.js LTS et npm ;
+- un compte Supabase (projet gratuit suffisant pour la démo) ;
+- un compte Expo si tu veux générer l'APK ;
+- une clé OpenCode Zen pour la vraie IA. Le mode mock fonctionne sans cette clé.
+
+```bash
+git clone https://github.com/Nassim-Bzr/Recognizer_AI_Native.git
+cd Recognizer_AI_Native
+npm install
+```
+
+> Les commandes `cp` ci-dessous sont pour macOS/Linux. Sous Windows PowerShell, utilise
+> `Copy-Item .env.example .env`.
 
 ### 1. Créer le projet Supabase
 
 1. Crée un projet sur [supabase.com](https://supabase.com) (gratuit).
 2. Dashboard > **SQL Editor** > New query → colle le contenu de
    [`supabase/schema.sql`](supabase/schema.sql) → **Run**.
-   Ça crée la table `scans`, les policies RLS et le bucket de photos.
+   Ça crée la table `scans`, les droits Data API nécessaires aux nouveaux projets Supabase,
+   les policies RLS et le bucket de photos.
 3. (Recommandé pour la démo) **Authentication > Sign In / Up > Email** →
    désactive « Confirm email » pour pouvoir créer des comptes instantanément.
 
@@ -47,53 +64,74 @@ validé et normalisé côté serveur.
 cp .env.example .env
 ```
 
-Remplis `.env` avec les valeurs de **Project Settings > API** :
+Remplis `.env` avec les valeurs de **Settings > API** :
 
 ```
 EXPO_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
-EXPO_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+EXPO_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_... # ou legacy anon key eyJ... pour un ancien projet
 EXPO_PUBLIC_AI_MOCK=1        # 1 = IA simulée (aucune clé requise), 0 = vraie IA
 ```
+
+`EXPO_PUBLIC_SUPABASE_ANON_KEY` est conservé comme nom de variable pour compatibilité :
+il accepte aussi la **Publishable key** actuelle. Ne mets **jamais** une `service_role key`
+dans `.env`, ni dans EAS : elle contourne la sécurité de la base.
 
 ### 3. Démarrer
 
 ```bash
-npm install
-npx expo start
+npx expo start --clear
 ```
 
-Scanne le QR code avec **Expo Go** sur ton téléphone. Avec `EXPO_PUBLIC_AI_MOCK=1`,
+Si ta version d'**Expo Go** prend encore en charge Expo SDK 54, tu peux scanner le QR code.
+Sinon, utilise l'APK décrite plus bas : c'est le moyen recommandé pour la démonstration.
+Avec `EXPO_PUBLIC_AI_MOCK=1`,
 tout le parcours fonctionne (l'estimation est simulée) — parfait pour développer l'UI.
 
 ### 4. Brancher la vraie IA (bonus valorisé)
 
-Récupère une clé API **gratuite** sur [opencode.ai](https://opencode.ai) (section **Zen** →
-« Copier la clé »), puis :
+Récupère une clé API sur [OpenCode Zen](https://opencode.ai/docs/zen), puis :
 
 ```bash
-npx supabase login
-npx supabase secrets set --project-ref <ton-project-ref> OPENCODE_API_KEY=sk-...
-npx supabase functions deploy estimate --project-ref <ton-project-ref>
+npx supabase@latest login
+npx supabase@latest secrets set --project-ref <ton-project-ref> OPENCODE_API_KEY=sk-...
+npx supabase@latest functions deploy estimate --project-ref <ton-project-ref>
 ```
 
 Puis passe `EXPO_PUBLIC_AI_MOCK=0` dans `.env` et relance `npx expo start --clear`.
 
-> 💰 Coût : le modèle par défaut est `mimo-v2.5-free` (vision, 200k contexte, **0 €**).
-> Tu peux changer de modèle sans toucher au code via un secret :
-> `npx supabase secrets set AI_MODEL=claude-sonnet-5` (ou tout autre modèle du
-> catalogue Zen, endpoint OpenAI-compatible `https://opencode.ai/zen/v1/chat/completions`).
+> Le modèle par défaut est `mimo-v2.5-free`, bien disponible dans Zen au moment de la rédaction.
+> Son offre gratuite est temporaire : si elle disparaît ou atteint une limite, l'app affiche une
+> erreur et il faut sélectionner un autre modèle Zen. Pour le changer sans toucher au code :
+> `npx supabase@latest secrets set --project-ref <ton-project-ref> AI_MODEL=<modele-zen>`.
+> La clé `OPENCODE_API_KEY` reste uniquement dans les secrets Supabase, jamais dans `.env`.
+
+**Vérification recommandée :** crée un compte dans l'application, réalise une estimation,
+enregistre-la puis vérifie que la ligne et la photo apparaissent dans le projet Supabase.
 
 ### 5. Générer l'APK (déploiement)
 
 ```bash
-npm install -g eas-cli
-eas login
-eas build --platform android --profile preview
+npx eas-cli@latest login
+npx eas-cli@latest init
+```
+
+`eas init` relie ce clone à **ton** compte Expo et ajoute un identifiant de projet dans
+`app.json`. Pour publier une application distincte sur un store, remplace aussi les identifiants
+`android.package` et `ios.bundleIdentifier` dans ce fichier par des valeurs uniques.
+
+Les fichiers `.env` ne sont pas envoyés aux builds cloud. Ajoute donc les deux variables publiques
+du projet Supabase dans l'environnement EAS `preview` (elles sont publiques par nature, car
+embarquées dans l'APK) :
+
+```bash
+npx eas-cli@latest env:create --name EXPO_PUBLIC_SUPABASE_URL --value https://xxxx.supabase.co --environment preview --visibility plaintext
+npx eas-cli@latest env:create --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value sb_publishable_... --environment preview --visibility plaintext
+npx eas-cli@latest build --platform android --profile preview
 ```
 
 À la fin du build, EAS fournit un lien pour télécharger l'**APK installable** sur un
-vrai téléphone (les variables `EXPO_PUBLIC_*` de `.env` sont embarquées au build —
-configure-les aussi dans EAS > Environment variables pour les builds cloud).
+vrai téléphone. Le profil `preview` active déjà la vraie IA (`EXPO_PUBLIC_AI_MOCK=0`) ;
+assure-toi donc d'avoir déployé la fonction `estimate` et son secret OpenCode avant de lancer le build.
 
 ---
 
