@@ -13,6 +13,13 @@ export type Category = (typeof CATEGORIES)[number];
 
 export type ScanStatus = 'kept' | 'selling' | 'sold';
 
+/** Indices facultatifs fournis par l'utilisateur pour fiabiliser l'identification. */
+export interface EstimationHints {
+  productReference?: string;
+  conditionNotes?: string;
+  accessories?: string;
+}
+
 export const STATUS_LABELS: Record<ScanStatus, string> = {
   kept: 'À garder',
   selling: 'À vendre',
@@ -34,6 +41,8 @@ export interface Estimation {
   competition: 'Faible' | 'Moyenne' | 'Saturée';
   advice: string;
   description: string;
+  /** Variantes pré-générées pendant l'estimation, jamais persistées en base. */
+  description_variants?: string[];
   confidence: 'Haute' | 'Moyenne' | 'Basse';
 }
 
